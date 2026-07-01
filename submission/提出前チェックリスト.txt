@@ -1,0 +1,12 @@
+[ ] GitHub pushでJenkinsが自動起動した
+[ ] ngrokに POST /github-webhook/ 200 OK が表示された
+[ ] Jenkinsの最終結果が SUCCESS
+[ ] 単体テストが全件OK
+[ ] output/weather_data.json がある
+[ ] output/weather_data.csv がある
+[ ] output/index.html がある
+[ ] output/build_summary.json がある
+[ ] Jenkinsコンソールログをダウンロードした
+[ ] 実行動画にGitHub・ngrok・Jenkinsの3画面が含まれる
+[ ] 動画やログにトークン・Webhook URLの秘密情報が映っていない
+[ ] プロジェクト、実行動画、output、Jenkinsログを同じ提出フォルダにまとめた

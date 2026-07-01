@@ -1,0 +1,13 @@
++ /opt/pyvenv/bin/python -m unittest discover -s tests -v
++ /opt/pyvenv/bin/python fetch_weather.py --offline
+[weather] offline mode: data/sample_open_meteo.json
+[weather] generated 7 days
+[weather] JSON: output/weather_data.json
+[weather] CSV : output/weather_data.csv
++ node tools/generate_dashboard.js
+[dashboard] generated: output/index.html
+[dashboard] rows: 7
++ /opt/pyvenv/bin/python tools/verify_outputs.py
+[verify] success: 7 rows, 3 primary artifacts
+
+Local pipeline completed successfully.

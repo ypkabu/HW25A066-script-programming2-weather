@@ -1,0 +1,17 @@
+HW25A066_スクリプトプログラミング演習2/
+├─ project/
+│  ├─ Jenkinsfile
+│  ├─ fetch_weather.py
+│  ├─ run_local.py
+│  ├─ src/
+│  ├─ tools/
+│  ├─ tests/
+│  └─ data/
+├─ output/
+│  ├─ weather_data.json
+│  ├─ weather_data.csv
+│  ├─ index.html
+│  └─ build_summary.json
+├─ jenkins実行動画_HW25A066.mp4
+├─ jenkins_console_HW25A066.txt
+└─ HW25A066_最終レポート.pdf

@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+.DS_Store
+.playwright-cli/
+.jenkins-home/
+jenkins.war
+output/*
+!output/.gitkeep
+submission/evidence/
+HW25A066_提出用/
+HW25A066_スクリプトプログラミング演習2_提出.zip
