@@ -58,10 +58,12 @@ pipeline {
             steps {
                 script {
                     def offlineFlag = params.OFFLINE_MODE ? '--offline' : ''
-                    def command = "fetch_weather.py --location \"${params.LOCATION_NAME}\" --latitude ${params.LATITUDE} --longitude ${params.LONGITUDE} ${offlineFlag}"
                     if (isUnix()) {
+                        def command = "fetch_weather.py --location \"${params.LOCATION_NAME}\" --latitude ${params.LATITUDE} --longitude ${params.LONGITUDE} ${offlineFlag}"
                         sh "python3 ${command}"
                     } else {
+                        // Windows batch can corrupt non-ASCII CLI arguments; the script default is the same location.
+                        def command = "fetch_weather.py --latitude ${params.LATITUDE} --longitude ${params.LONGITUDE} ${offlineFlag}"
                         bat "python ${command}"
                     }
                 }
