@@ -42,3 +42,5 @@ https://<自分のngrokドメイン>/github-webhook/
 ## セキュリティ
 
 Discord Webhook URLやngrokのauthtokenはリポジトリへ書き込みません。Jenkins Credentialsまたは環境変数で設定します。
+
+Webhook rehearsal note: Jenkins auto-build check on 2026-07-03 JST.
