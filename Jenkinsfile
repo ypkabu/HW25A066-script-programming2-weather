@@ -97,6 +97,7 @@ pipeline {
 
     post {
         always {
+            echo 'Archiving artifacts'
             archiveArtifacts artifacts: 'output/**', fingerprint: true, allowEmptyArchive: false
         }
         success {
