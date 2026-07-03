@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+from urllib.parse import urlencode, urlsplit, urlunsplit
 import urllib.request
 
 
@@ -31,8 +32,13 @@ def main() -> int:
         ]
     )
     body = json.dumps({"content": text}, ensure_ascii=False).encode("utf-8")
+    parts = urlsplit(webhook_url)
+    query = urlencode({"wait": "true"})
+    if parts.query:
+        query = f"{parts.query}&{query}"
+    wait_url = urlunsplit((parts.scheme, parts.netloc, parts.path, query, parts.fragment))
     request = urllib.request.Request(
-        webhook_url,
+        wait_url,
         data=body,
         method="POST",
         headers={"Content-Type": "application/json", "User-Agent": "Jenkins-weather-dashboard"},
@@ -40,7 +46,12 @@ def main() -> int:
     with urllib.request.urlopen(request, timeout=10) as response:
         if response.status not in (200, 204):
             raise RuntimeError(f"Discord returned HTTP {response.status}")
-    print("[discord] notification sent")
+        payload = response.read().decode("utf-8", errors="replace") if response.status == 200 else ""
+    if payload:
+        data = json.loads(payload)
+        print(f"[discord] notification sent: message_id={data.get('id', 'unknown')}")
+    else:
+        print("[discord] notification sent")
     return 0
 
 
