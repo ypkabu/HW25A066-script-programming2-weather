@@ -13,7 +13,10 @@
 - `output/weather_data.json`: メタデータを含む7日分の集計データ
 - `output/weather_data.csv`: Excel等で確認できるCSV
 - `output/index.html`: JavaScriptで生成した静的ダッシュボード
+- `output/weather_alerts.json`: 高温・低温・強い雨・強風の警告判定
+- `output/change_summary.json`: 前回ビルドとの気温差・降水量差・変化日数
 - `output/build_summary.json`: 成果物検証結果
+- `output/artifact_manifest.json`: 成果物ファイル名・サイズ・SHA-256・生成日時・ビルド番号
 
 ## ローカル確認
 
@@ -41,7 +44,7 @@ https://<自分のngrokドメイン>/github-webhook/
 
 ## セキュリティ
 
-Discord Webhook URLやngrokのauthtokenはリポジトリへ書き込みません。Jenkins Credentialsまたは環境変数で設定します。
+Discord Webhook URLやngrokのauthtokenはリポジトリへ書き込みません。DiscordはJenkins CredentialsのSecret textに保存し、Jenkinsパラメータ `DISCORD_CREDENTIAL_ID`（既定: `discord-webhook-url`）から取得します。Credential未設定時や通知失敗時は安全にスキップします。
 
 Webhook rehearsal note: Jenkins auto-build check on 2026-07-03 JST.
 Recorded webhook run note: final Jenkins auto-build check on 2026-07-03 JST.

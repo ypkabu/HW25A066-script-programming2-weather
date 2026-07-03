@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import math
+import os
 import statistics
 import urllib.parse
 import urllib.request
@@ -53,6 +55,7 @@ class DailyWeather:
     humidity_avg_pct: float
     precipitation_total_mm: float
     precipitation_probability_max_pct: float
+    wind_speed_max_kmh: float
     weather_code: int
     weather: str
 
@@ -67,6 +70,7 @@ def build_api_url(latitude: float, longitude: float, timezone: str = "Asia/Tokyo
                 "relative_humidity_2m",
                 "precipitation_probability",
                 "precipitation",
+                "wind_speed_10m",
                 "weather_code",
             ]
         ),
@@ -126,6 +130,12 @@ def aggregate_daily(payload: dict[str, Any]) -> list[DailyWeather]:
     lengths = {key: len(hourly[key]) for key in required}
     if len(set(lengths.values())) != 1:
         raise ValueError(f"Hourly field lengths differ: {lengths}")
+    wind_values = hourly.get("wind_speed_10m")
+    if wind_values is None:
+        # 古いfixtureやAPI仕様差分でも既存課題を止めない。強風警告は0扱いで生成する。
+        wind_values = [0.0 for _ in hourly["time"]]
+    elif len(wind_values) != lengths["time"]:
+        raise ValueError("Hourly field length differs: wind_speed_10m")
 
     grouped: dict[str, dict[str, list[float | int]]] = defaultdict(
         lambda: {
@@ -133,6 +143,7 @@ def aggregate_daily(payload: dict[str, Any]) -> list[DailyWeather]:
             "humidity": [],
             "precip_probability": [],
             "precipitation": [],
+            "wind_speed": [],
             "weather_code": [],
         }
     )
@@ -145,6 +156,7 @@ def aggregate_daily(payload: dict[str, Any]) -> list[DailyWeather]:
             _safe_float(hourly["precipitation_probability"][index])
         )
         grouped[date]["precipitation"].append(_safe_float(hourly["precipitation"][index]))
+        grouped[date]["wind_speed"].append(_safe_float(wind_values[index]))
         grouped[date]["weather_code"].append(int(_safe_float(hourly["weather_code"][index])))
 
     daily: list[DailyWeather] = []
@@ -154,6 +166,7 @@ def aggregate_daily(payload: dict[str, Any]) -> list[DailyWeather]:
         humidities = [float(v) for v in row["humidity"]]
         probabilities = [float(v) for v in row["precip_probability"]]
         precipitation = [float(v) for v in row["precipitation"]]
+        wind_speed = [float(v) for v in row["wind_speed"]]
         codes = [int(v) for v in row["weather_code"]]
         code = _dominant_code(codes)
         daily.append(
@@ -165,11 +178,166 @@ def aggregate_daily(payload: dict[str, Any]) -> list[DailyWeather]:
                 humidity_avg_pct=round(statistics.fmean(humidities), 1),
                 precipitation_total_mm=round(sum(precipitation), 1),
                 precipitation_probability_max_pct=round(max(probabilities), 1),
+                wind_speed_max_kmh=round(max(wind_speed), 1),
                 weather_code=code,
                 weather=WEATHER_LABELS.get(code, f"不明({code})"),
             )
         )
     return daily
+
+
+ALERT_THRESHOLDS = {
+    "high_temperature_c": 30.0,
+    "low_temperature_c": 0.0,
+    "strong_rain_mm": 20.0,
+    "strong_wind_kmh": 40.0,
+}
+
+
+def build_weather_alerts(daily: list[DailyWeather]) -> dict[str, Any]:
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    days: list[dict[str, Any]] = []
+    counts = {"高温": 0, "低温": 0, "強い雨": 0, "強風": 0}
+    for item in daily:
+        alerts: list[dict[str, Any]] = []
+        if item.temp_max_c >= ALERT_THRESHOLDS["high_temperature_c"]:
+            alerts.append(
+                {
+                    "type": "高温",
+                    "level": "warning",
+                    "message": f"最高気温が{item.temp_max_c:.1f}℃まで上がる予報です。",
+                }
+            )
+        if item.temp_min_c <= ALERT_THRESHOLDS["low_temperature_c"]:
+            alerts.append(
+                {
+                    "type": "低温",
+                    "level": "warning",
+                    "message": f"最低気温が{item.temp_min_c:.1f}℃まで下がる予報です。",
+                }
+            )
+        if item.precipitation_total_mm >= ALERT_THRESHOLDS["strong_rain_mm"]:
+            alerts.append(
+                {
+                    "type": "強い雨",
+                    "level": "warning",
+                    "message": f"日降水量が{item.precipitation_total_mm:.1f}mmの見込みです。",
+                }
+            )
+        if item.wind_speed_max_kmh >= ALERT_THRESHOLDS["strong_wind_kmh"]:
+            alerts.append(
+                {
+                    "type": "強風",
+                    "level": "warning",
+                    "message": f"最大風速が{item.wind_speed_max_kmh:.1f}km/hの見込みです。",
+                }
+            )
+        for alert in alerts:
+            counts[alert["type"]] += 1
+        days.append({"date": item.date, "alerts": alerts})
+    return {
+        "generated_at": generated_at,
+        "thresholds": ALERT_THRESHOLDS,
+        "summary": {
+            "total_alert_days": sum(1 for day in days if day["alerts"]),
+            "counts": counts,
+        },
+        "days": days,
+    }
+
+
+def build_change_summary(
+    daily: list[DailyWeather], previous_document: dict[str, Any] | None
+) -> dict[str, Any]:
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    current_rows = {row.date: row for row in daily}
+    previous_rows = {
+        str(row.get("date")): row for row in (previous_document or {}).get("daily", [])
+    }
+    comparisons: list[dict[str, Any]] = []
+    changed_days = 0
+    for date in sorted(current_rows):
+        current = current_rows[date]
+        previous = previous_rows.get(date)
+        if not previous:
+            comparisons.append(
+                {
+                    "date": date,
+                    "previous_available": False,
+                    "temperature_avg_diff_c": None,
+                    "precipitation_total_diff_mm": None,
+                    "changed": False,
+                }
+            )
+            continue
+        temp_diff = round(current.temp_avg_c - _safe_float(previous.get("temp_avg_c")), 1)
+        precip_diff = round(
+            current.precipitation_total_mm
+            - _safe_float(previous.get("precipitation_total_mm")),
+            1,
+        )
+        changed = abs(temp_diff) >= 0.1 or abs(precip_diff) >= 0.1
+        if changed:
+            changed_days += 1
+        comparisons.append(
+            {
+                "date": date,
+                "previous_available": True,
+                "temperature_avg_diff_c": temp_diff,
+                "precipitation_total_diff_mm": precip_diff,
+                "changed": changed,
+            }
+        )
+    return {
+        "generated_at": generated_at,
+        "previous_build_available": bool(previous_rows),
+        "changed_days": changed_days,
+        "comparisons": comparisons,
+    }
+
+
+def write_weather_alerts(daily: list[DailyWeather], output_dir: Path) -> Path:
+    path = output_dir / "weather_alerts.json"
+    path.write_text(
+        json.dumps(build_weather_alerts(daily), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return path
+
+
+def write_change_summary(
+    daily: list[DailyWeather], output_dir: Path, previous_document: dict[str, Any] | None
+) -> Path:
+    path = output_dir / "change_summary.json"
+    path.write_text(
+        json.dumps(build_change_summary(daily, previous_document), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return path
+
+
+def write_artifact_manifest(output_dir: Path, artifact_paths: Iterable[Path]) -> Path:
+    generated_at = datetime.now().astimezone().isoformat(timespec="seconds")
+    build_number = os.environ.get("BUILD_NUMBER", "local")
+    entries = []
+    for path in sorted({Path(item) for item in artifact_paths}, key=lambda item: item.name):
+        if not path.is_file():
+            continue
+        entries.append(
+            {
+                "file_name": path.name,
+                "size": path.stat().st_size,
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                "generated_at": generated_at,
+                "build_number": build_number,
+            }
+        )
+    manifest_path = output_dir / "artifact_manifest.json"
+    manifest_path.write_text(
+        json.dumps({"artifacts": entries}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return manifest_path
 
 
 def write_outputs(

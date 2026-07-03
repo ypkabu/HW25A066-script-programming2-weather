@@ -9,7 +9,9 @@ from src.weather_pipeline import (
     build_api_url,
     fetch_weather_json,
     load_json,
+    write_change_summary,
     write_outputs,
+    write_weather_alerts,
 )
 
 
@@ -31,6 +33,15 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+    previous_document = None
+    previous_path = args.output_dir / "weather_data.json"
+    if previous_path.is_file():
+        try:
+            previous_document = load_json(previous_path)
+            print(f"[weather] previous output found: {previous_path}")
+        except Exception as exc:
+            print(f"[weather] previous output ignored: {exc}")
+
     source: str
     if args.offline:
         payload = load_json(args.fixture)
@@ -63,9 +74,13 @@ def main() -> int:
         longitude=args.longitude,
         source=source,
     )
+    alerts_path = write_weather_alerts(daily, args.output_dir)
+    change_path = write_change_summary(daily, args.output_dir, previous_document)
     print(f"[weather] generated {len(daily)} days")
     print(f"[weather] JSON: {json_path}")
     print(f"[weather] CSV : {csv_path}")
+    print(f"[weather] alerts: {alerts_path}")
+    print(f"[weather] changes: {change_path}")
     return 0
 
 

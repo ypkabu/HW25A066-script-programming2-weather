@@ -1,3 +1,22 @@
+def notifyDiscord(String status) {
+    try {
+        def credentialId = params.DISCORD_CREDENTIAL_ID?.trim()
+        if (!credentialId) {
+            echo '[discord] credential id is empty; notification skipped'
+            return
+        }
+        withCredentials([string(credentialsId: credentialId, variable: 'DISCORD_WEBHOOK_URL')]) {
+            if (isUnix()) {
+                sh "python3 tools/notify_discord.py ${status} || true"
+            } else {
+                bat "python tools\\notify_discord.py ${status} || exit /b 0"
+            }
+        }
+    } catch (err) {
+        echo "[discord] notification skipped or failed without failing build: ${err.getMessage()}"
+    }
+}
+
 pipeline {
     agent any
 
@@ -16,6 +35,7 @@ pipeline {
         string(name: 'LATITUDE', defaultValue: '34.7990', description: '緯度')
         string(name: 'LONGITUDE', defaultValue: '135.3560', description: '経度')
         booleanParam(name: 'OFFLINE_MODE', defaultValue: false, description: 'APIを使わずサンプルデータで実行')
+        string(name: 'DISCORD_CREDENTIAL_ID', defaultValue: 'discord-webhook-url', description: 'Jenkins Secret text credential id。空なら通知をスキップ')
     }
 
     environment {
@@ -102,20 +122,12 @@ pipeline {
         }
         success {
             script {
-                if (isUnix()) {
-                    sh 'python3 tools/notify_discord.py SUCCESS || true'
-                } else {
-                    bat 'python tools\\notify_discord.py SUCCESS || exit /b 0'
-                }
+                notifyDiscord('SUCCESS')
             }
         }
         failure {
             script {
-                if (isUnix()) {
-                    sh 'python3 tools/notify_discord.py FAILURE || true'
-                } else {
-                    bat 'python tools\\notify_discord.py FAILURE || exit /b 0'
-                }
+                notifyDiscord('FAILURE')
             }
         }
     }

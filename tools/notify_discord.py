@@ -16,10 +16,20 @@ def main() -> int:
     job_name = os.environ.get("JOB_NAME", "weather-dashboard")
     build_number = os.environ.get("BUILD_NUMBER", "local")
     build_url = os.environ.get("BUILD_URL", "")
+    git_commit = os.environ.get("GIT_COMMIT", os.environ.get("GIT_COMMIT_SHORT", "unknown"))
+    if len(git_commit) > 12:
+        git_commit = git_commit[:12]
     icon = "✅" if status.upper() == "SUCCESS" else "❌"
-    text = f"{icon} Jenkins {status}: {job_name} #{build_number}"
-    if build_url:
-        text += f"\n{build_url}"
+    text = "\n".join(
+        [
+            f"{icon} Jenkins build notification",
+            f"Job: {job_name}",
+            f"Build: #{build_number}",
+            f"Status: {status.upper()}",
+            f"Git commit: {git_commit}",
+            f"Build URL: {build_url or 'not available'}",
+        ]
+    )
     body = json.dumps({"content": text}, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
         webhook_url,
