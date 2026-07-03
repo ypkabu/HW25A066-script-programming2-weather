@@ -20,6 +20,7 @@ def notifyDiscord(String status) {
 pipeline {
     agent {
         node {
+            label ''
             customWorkspace 'C:/jenkins_workspaces/HW25A066-weather-dashboard'
         }
     }
