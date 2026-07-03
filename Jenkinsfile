@@ -18,7 +18,11 @@ def notifyDiscord(String status) {
 }
 
 pipeline {
-    agent any
+    agent {
+        node {
+            customWorkspace 'C:/jenkins_workspaces/HW25A066-weather-dashboard'
+        }
+    }
 
     triggers {
         githubPush()
@@ -26,6 +30,7 @@ pipeline {
 
     options {
         timestamps()
+        skipDefaultCheckout(true)
         disableConcurrentBuilds()
         buildDiscarder(logRotator(numToKeepStr: '20'))
     }
